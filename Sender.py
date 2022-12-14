@@ -12,11 +12,22 @@ RCV_PORT = int(sys.argv[2])
 udp_socket = socket(AF_INET, SOCK_DGRAM)
 host = IP
 addr = (host, RCV_PORT)
-chunk_size = 1024  # 1 KiB
+chunk_size = 1022  # 1 KiB
 
+packet_no_counter = 1
 with open(FILE_PATH, "rb") as in_file:
     while True:
         chunk = in_file.read(chunk_size)
-        udp_socket.sendto(chunk, addr)
+        header = bytearray(packet_no_counter.to_bytes(2, 'big'))
         if chunk == b"":
+            end_pointer = bytearray((0).to_bytes(2, 'big'))
+            end_pointer += bytearray(chunk)
+
+            udp_socket.sendto(end_pointer, addr)
+            print('--FILE SEND IS END--- ' + str(packet_no_counter))
             break  # end of file
+
+        header += bytearray(chunk)
+        udp_socket.sendto(header, addr)
+        packet_no_counter = packet_no_counter + 1
+
