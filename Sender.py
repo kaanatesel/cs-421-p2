@@ -2,6 +2,8 @@
 import sys
 import os
 from socket import *
+import threading
+import time
 
 FILE_PATH = str(sys.argv[1])
 IP = "127.0.0.1"
@@ -14,6 +16,13 @@ host = IP
 addr = (host, RCV_PORT)
 chunk_size = 1022  # 1 KiB
 
+
+def run():
+    time.sleep(0.05)
+    if not udp_socket.recv(chunk_size):  #ack için başka bişey var mı yoksa direkt recv mi kullancaz/ argument emin degilim
+        run()
+
+
 packet_no_counter = 1
 with open(FILE_PATH, "rb") as in_file:
     while True:
@@ -24,10 +33,10 @@ with open(FILE_PATH, "rb") as in_file:
             end_pointer += bytearray(chunk)
 
             udp_socket.sendto(end_pointer, addr)
+            sending = threading.Thread(run())
             print('--FILE SEND IS END--- ' + str(packet_no_counter))
             break  # end of file
 
         header += bytearray(chunk)
         udp_socket.sendto(header, addr)
         packet_no_counter = packet_no_counter + 1
-
