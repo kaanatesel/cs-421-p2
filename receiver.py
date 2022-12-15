@@ -12,6 +12,7 @@ IP = "127.0.0.1"
 FILENAME = "received.png"
 
 def send_ACK(sock, addr, packet_no):
+    print('SEND ACK ' + str(packet_no))
     sock.sendto(packet_no.to_bytes(HEADER_SIZE, byteorder="big"), addr)
     
 class DelayedACKThread(threading.Thread):
@@ -41,7 +42,7 @@ DELAY = int(sys.argv[4]) # in ms
 # Socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((IP, PORT))
-
+print('rcv is up')
 # Selective repeat stuff
 received_numbers = set()
 buf = {} # buffer
@@ -61,7 +62,7 @@ while True:
     data_bytes = packet[HEADER_SIZE:PACKET_SIZE]
     
     # Uncomment this to print the received packet no and data size (before applying drop)
-    #print(packet_no, len(data_bytes))
+    print(packet_no, len(data_bytes))
     
     # Terminate program if packet_no is 0
     if packet_no == 0:
