@@ -4,6 +4,7 @@ import os
 from socket import *
 import threading
 import time
+from math import ceil
 
 FILE_PATH = str(sys.argv[1])
 IP = "127.0.0.1"
@@ -21,17 +22,11 @@ send_packets = set()
 thread_arr = list()
 
 
-def run():
-    time.sleep(0.05)
-    if not udp_socket.recv(chunk_size):
-        run()
-
-
 def send_packet(packet, packet_no):
     # print('rcv ack  ' + str(rcved_acks))
+    global rcved_acks, send_base
     while True:
-        # print(packet_no in rcved_acks)
-        if packet_no in rcved_acks:  # main process threadleri kapattığı için buna gerek olmayabilir bakmak lazım
+        if packet_no in rcved_acks:
             break
         udp_socket.sendto(packet, addr)
 
@@ -39,64 +34,77 @@ def send_packet(packet, packet_no):
 
 
 def is_file_trans_over(chunk):
+    global not_finshed, next_seq_no, rcved_acks
+    file_size = os.path.getsize(FILE_PATH)
+    packet_count = ceil(file_size / chunk_size)
     if chunk == b"":
-        print('--FILE SEND IS END--- ' + str(packet_no_counter))
+        print('--FILE SEND IS END--- ' + str(next_seq_no))
         end_pointer = bytearray((0).to_bytes(2, 'big'))
         end_pointer += bytearray(chunk)
         udp_socket.sendto(end_pointer, addr)
-
         while True:
-            print('acks ' + str(len(rcved_acks)))
-            print('counter ' + str(packet_no_counter))
-            if len(rcved_acks) + 1 >= packet_no_counter:
+            # print('acks ' + str(len(rcved_acks)))
+            # print(rcved_acks)
+            #
+            # print('packet_count ' + str(packet_count))
+            if len(rcved_acks) + 1 >= packet_count:
+                not_finshed = False
                 break
-            ack = udp_socket.recv(chunk_size)
-            # print('ack rcved ==>  ' + str(ack))
-            int_val_ack = int.from_bytes(ack, "big")
-            # print(ack)
-            # print(int_val_ack)
-
         return True
 
 
-packet_no_counter = 1
-seq_no = 1
+not_finshed = True
+
+
+def wait_ack():
+    global rcved_acks, send_base, not_finshed
+    while not_finshed:
+        #print(not_finshed)
+
+        ack = udp_socket.recv(chunk_size)
+        int_val_ack = int.from_bytes(ack, "big")
+        rcved_acks.add(int_val_ack)
+        # print('send_base  ' + str(send_base))
+        # print('int_val_ack  ' + str(int_val_ack))
+        # print('thread_arr[int_val_ack - 1].is_alive():  ' + str(thread_arr[int_val_ack - 1].is_alive()))
+        # print(str(rcved_acks))
+        # print(thread_arr)
+        # print(len(thread_arr))
+        if int_val_ack in range(send_base, send_base + N):
+            if thread_arr[int_val_ack - 1].is_alive():
+                # print('Thread ' + str(int_val_ack) + ' is joined.')
+                send_base = send_base + 1
+                thread_arr[int_val_ack - 1].join()
+
+
+wait_ack_thrd = threading.Thread(target=wait_ack)
+wait_ack_thrd.start()
+
 print('started')
-with open(FILE_PATH, "rb") as in_file:
-    while True:
+
+in_file = open(FILE_PATH, "rb")
+
+send_base = 1
+next_seq_no = 1
+while True:
+    # print('next_seq_no  ' + str(next_seq_no) + '   send_base + N ' + str(send_base + N))
+    # print('send_base + N ' + str(send_base + N))
+    if next_seq_no <= send_base + N:
         chunk = in_file.read(chunk_size)
+
         if is_file_trans_over(chunk):
             print('end')
             break
 
-        seq_no = packet_no_counter
-        for seq_no in range(packet_no_counter, packet_no_counter + N - 1):
-            # print("seq nooo ==  " + str(seq_no))
-            # print("send packets  == " + str(send_packets))
-            if len(thread_arr) == 0 or seq_no not in send_packets:
-                # print('in  seq no == ' + str(seq_no))
-                header = bytearray(packet_no_counter.to_bytes(2, 'big'))
-                header += bytearray(chunk)
+        header = bytearray(next_seq_no.to_bytes(2, 'big'))
+        header += bytearray(chunk)
 
-                new_thread = threading.Thread(target=send_packet, args=(header, packet_no_counter))
-                thread_arr.append(new_thread)
-                # print(thread_arr)
-                thread_arr[seq_no - 1].start()
+        new_thread = threading.Thread(target=send_packet, args=(header, next_seq_no))
+        thread_arr.append(new_thread)
+        # print(thread_arr)
+        thread_arr[next_seq_no - 1].start()
+        next_seq_no = next_seq_no + 1
 
-                send_packets.add(seq_no)
-
-                seq_no = seq_no + 1
-            # else:
-            # print('already sent ' + str(seq_no))
-
-        ack = udp_socket.recv(chunk_size)
-        # print('ack rcved ==>  ' + str(ack))
-        int_val_ack = int.from_bytes(ack, "big")
-        rcved_acks.add(int_val_ack)
-
-        if packet_no_counter in rcved_acks:
-            packet_no_counter = packet_no_counter + 1
-
-        if thread_arr[int_val_ack - 1].is_alive():
-            # print('Thread ' + str(int_val_ack) + ' is joined.')
-            thread_arr[int_val_ack - 1].join()
+print('Finito')
+exit()
+wait_ack_thrd.join()

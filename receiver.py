@@ -9,11 +9,11 @@ from time import sleep, time
 PACKET_SIZE = 1024
 HEADER_SIZE = 2
 IP = "127.0.0.1"
-FILENAME = "received.txt"
+FILENAME = "received.png"
 
 
 def send_ACK(sock, addr, packet_no):
-    print('send ack ' + str(packet_no))
+    #print('send ack ' + str(packet_no))
     sock.sendto(packet_no.to_bytes(HEADER_SIZE, byteorder="big"), addr)
 
 
